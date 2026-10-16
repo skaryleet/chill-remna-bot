@@ -66,7 +66,7 @@ func main() {
 	webSrv.SetStaticDir(cfg.StaticDir)
 
 	var wg sync.WaitGroup
-	wg.Add(10)
+	wg.Add(11)
 	var botErr, webErr error
 
 	go func() {
@@ -76,6 +76,9 @@ func main() {
 	}()
 	go func() {
 		defer wg.Done()
+		if cfg.Managed != nil {
+			return
+		}
 		webErr = webSrv.Run(ctx)
 		if webErr == nil || ctx.Err() != nil {
 			return
@@ -127,6 +130,7 @@ func main() {
 		defer wg.Done()
 		a.RunBonusTrafficSweep(ctx)
 	}()
+	go func() { defer wg.Done(); a.RunManagedStatus(ctx) }()
 	wg.Wait()
 	// Даём доиграть недоделанному: выдаче по звёздам, возврату на баланс.
 	// Бюджет короткий намеренно — docker убивает контейнер через 10 секунд

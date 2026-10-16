@@ -24,6 +24,7 @@ import (
 	"github.com/go-telegram/bot/models"
 
 	"remnabot/internal/assets"
+	"remnabot/internal/brokenkvn"
 	"remnabot/internal/config"
 	"remnabot/internal/crypto"
 	"remnabot/internal/hostctl"
@@ -80,10 +81,11 @@ type messenger interface {
 }
 
 type App struct {
-	cfg     *config.Config
-	crypter *crypto.Crypter
-	log     *slog.Logger
-	b       *bot.Bot
+	networkStatus brokenkvn.Snapshot
+	cfg           *config.Config
+	crypter       *crypto.Crypter
+	log           *slog.Logger
+	b             *bot.Bot
 
 	ctl *hostctl.Controller
 	msg messenger
@@ -331,6 +333,20 @@ func New(cfg *config.Config, crypter *crypto.Crypter, log *slog.Logger) *App {
 }
 
 func (a *App) Bootstrap(ctx context.Context) error {
+	if a.managed() {
+		a.ctl = nil
+		bs, err := storage.LoadBootstrap(a.cfg.DataDir)
+		if err != nil {
+			return err
+		}
+		if bs != nil && (bs.DBKind != model.DBSQLite || bs.DSN != a.dsnForEnv(model.DBSQLite)) {
+			return errors.New("управляемый режим требует существующую локальную SQLite")
+		}
+		if err := a.openStore(model.DBSQLite, a.dsnForEnv(model.DBSQLite)); err != nil {
+			return err
+		}
+		return a.loadConfigIfStore(ctx)
+	}
 	bs, err := storage.LoadBootstrap(a.cfg.DataDir)
 	if err != nil {
 		return err
@@ -363,6 +379,13 @@ func (a *App) loadConfigIfStore(ctx context.Context) error {
 	cfg, ok, err := a.store.LoadConfig(ctx)
 	if err != nil {
 		return err
+	}
+	if a.managed() {
+		cfg, err = a.managedConfiguration(ctx, cfg, ok)
+		if err != nil {
+			return err
+		}
+		ok = true
 	}
 	if ok && cfg.Installed {
 		cfg.NormalizePricing()
@@ -450,11 +473,16 @@ func (a *App) foldLegacyP2PSquad(ctx context.Context) {
 // работает при любом типе установки — в том числе там, где мастер про ключ не
 // спрашивает (eGames, локальная панель за общим Caddy).
 func (a *App) newPanel(pc model.PanelConfig) *remnawave.Client {
-	return remnawave.New(a.panelWithEnv(pc))
+	c := remnawave.New(a.panelWithEnv(pc))
+	c.Managed = a.managed()
+	return c
 }
 
 // panelWithEnv накладывает CADDY_AUTH_API_TOKEN на конфиг панели.
 func (a *App) panelWithEnv(pc model.PanelConfig) model.PanelConfig {
+	if a.managed() {
+		return model.PanelConfig{Mode: model.ModeRemote, InstallType: model.InstallDocs, BaseURL: a.cfg.Managed.PanelURL, APIToken: a.cfg.Managed.PanelToken}
+	}
 	if a.cfg != nil && a.cfg.CaddyAuthToken != "" {
 		pc.APIKey = a.cfg.CaddyAuthToken
 	}
@@ -701,6 +729,9 @@ func (a *App) installed() bool {
 }
 
 func (a *App) handle(ctx context.Context, b *bot.Bot, update *models.Update) {
+	if a.managed() && update.Message != nil && !a.managedPrivateMessage(update.Message) {
+		return
+	}
 	defer func() {
 		if r := recover(); r != nil {
 			a.log.Error("паника в обработчике апдейта", "panic", r, "stack", string(debug.Stack()))
@@ -734,6 +765,18 @@ func (a *App) handle(ctx context.Context, b *bot.Bot, update *models.Update) {
 }
 
 func (a *App) handleMessage(ctx context.Context, m *models.Message) {
+	if a.managed() {
+		if !a.managedPrivateMessage(m) {
+			return
+		}
+		if strings.HasPrefix(m.Text, "/setup") || strings.HasPrefix(m.Text, "/update") {
+			a.managedNotice(ctx, m.From.ID)
+			return
+		}
+		if !a.managedAdmission(ctx, m.From.ID, false) {
+			return
+		}
+	}
 	chatID := m.Chat.ID
 	// A text message/command is not an inline-button action — drop any stale
 	// edit target from a previous callback so we never edit the wrong message.

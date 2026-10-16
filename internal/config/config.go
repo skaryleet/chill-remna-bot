@@ -4,11 +4,13 @@ import (
 	"fmt"
 	"log/slog"
 	"os"
+	"remnabot/internal/brokenkvn"
 	"strconv"
 	"strings"
 )
 
 type Config struct {
+	Managed  *brokenkvn.Config
 	BotToken string
 	AdminID  int64
 	DataDir  string
@@ -77,6 +79,16 @@ func Load() (*Config, error) {
 	id, err := strconv.ParseInt(rawAdmin, 10, 64)
 	if err != nil {
 		return nil, fmt.Errorf("ADMIN_TELEGRAM_ID должен быть числом: %w", err)
+	}
+	if path := os.Getenv("BROKENKVN_CONFIG_FILE"); path != "" {
+		managed, err := brokenkvn.Load(path)
+		if err != nil {
+			return nil, err
+		}
+		if id <= 0 || c.DBKind != "sqlite" {
+			return nil, fmt.Errorf("управляемый режим требует SQLite и положительный ADMIN_TELEGRAM_ID")
+		}
+		c.Managed = managed
 	}
 	c.AdminID = id
 	return c, nil

@@ -48,6 +48,10 @@ type wizard struct {
 }
 
 func (a *App) startWizard(ctx context.Context, chatID int64) {
+	if a.managed() {
+		a.managedNotice(ctx, chatID)
+		return
+	}
 	a.mu.Lock()
 	a.wiz[chatID] = &wizard{step: stepLang}
 	a.mu.Unlock()
@@ -121,6 +125,26 @@ const (
 )
 
 func (a *App) handleCallback(ctx context.Context, cq *models.CallbackQuery) {
+	if a.managed() {
+		a.msg.AnswerCallback(ctx, cq.ID)
+		if !a.managedPrivateCallback(cq) {
+			return
+		}
+		if a.managedBlockedCallback(cq.Data) {
+			a.managedNotice(ctx, cq.From.ID)
+			return
+		}
+		if strings.HasPrefix(cq.Data, "bkv:") {
+			if a.denyAccess(ctx, cq.From.ID, cq.From.ID == a.cfg.AdminID) {
+				return
+			}
+			a.managedFeature(ctx, cq.From.ID, strings.TrimPrefix(cq.Data, "bkv:"))
+			return
+		}
+		if !a.managedAdmission(ctx, cq.From.ID, false) {
+			return
+		}
+	}
 	a.msg.AnswerCallback(ctx, cq.ID)
 	chatID := cq.From.ID
 	a.setEditTarget(chatID, cqMsgID(cq))

@@ -35,12 +35,13 @@ type APIEvent struct {
 const apiLogCap = 200
 
 type Client struct {
-	base   string
-	token  string
-	cookie string
-	apiKey string
-	local  bool
-	http   *http.Client
+	Managed bool
+	base    string
+	token   string
+	cookie  string
+	apiKey  string
+	local   bool
+	http    *http.Client
 
 	// HWID delete-all retry tuning (0 = use defaults). Overridable in tests.
 	hwidRetryBase time.Duration
@@ -1731,6 +1732,9 @@ var errPanelDialect = errors.New("не удалось определить ве�
 // findByTelegram resolves a user by telegram id in whichever dialect the panel
 // speaks (see panelGen).
 func (c *Client) findByTelegram(ctx context.Context, telegramID int64) (*panelUser, error) {
+	if c.Managed {
+		return c.managedUser(ctx, telegramID)
+	}
 	if telegramID < 0 {
 		// Синтетическая личность аккаунта веб-кабинета, заведённого по почте.
 		// Фильтр панели принимает только неотрицательный telegramId

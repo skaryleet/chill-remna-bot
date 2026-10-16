@@ -7,8 +7,8 @@ name: build-and-push
 # сборки, поэтому слой COPY не инвалидируется и образ берётся из кэша.
 on:
   push:
-    branches: [main, dev]
-    tags: ["v*"]
+    branches: [brokenkvn]
+    tags: ["brokenkvn-v*"]
   workflow_dispatch:
 
 permissions:
@@ -16,7 +16,30 @@ permissions:
   packages: write
 
 jobs:
+  verify:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_USER: remnabot
+          POSTGRES_PASSWORD: remnabot
+          POSTGRES_DB: remnabot
+        ports: ["5432:5432"]
+        options: --health-cmd "pg_isready -U remnabot" --health-interval 5s --health-retries 10
+    env:
+      TEST_POSTGRES_DSN: postgres://remnabot:remnabot@localhost:5432/remnabot?sslmode=disable
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
+        with:
+          go-version: "1.26.3"
+          cache: true
+      - run: go vet ./...
+      - run: go test ./...
+      - run: go test -race ./...
   docker:
+    needs: verify
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
@@ -40,11 +63,8 @@ jobs:
         with:
           images: ghcr.io/${{ github.repository }}
           tags: |
-            type=raw,value=latest,enable={{is_default_branch}}
-            type=raw,value=dev,enable=${{ github.ref == 'refs/heads/dev' }}
+            type=raw,value=brokenkvn
             type=ref,event=tag
-            type=semver,pattern=v{{major}}
-            type=semver,pattern=v{{major}}.{{minor}}
             type=sha,format=short
 
       - name: Build and push

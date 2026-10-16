@@ -571,6 +571,9 @@ func (a *App) showMenu(ctx context.Context, chatID int64, isAdmin bool, name str
 		}
 		rows = append(rows, a.contactRows()...)
 	}
+	if a.managed() && a.cfg.Managed.Features {
+		rows = append(rows, []models.InlineKeyboardButton{btn("Telegram Proxy", "bkv:proxy"), btn("Статус сети", "bkv:status")})
+	}
 	if len(ents) == 0 {
 		caption = a.applyPremium(caption)
 	}

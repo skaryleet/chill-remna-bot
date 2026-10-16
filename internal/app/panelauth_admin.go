@@ -249,6 +249,10 @@ func (a *App) clearPanelInput(chatID int64) {
 // setPanelSecret сохраняет ключ или куку и сразу пересобирает клиента панели:
 // иначе бот продолжил бы ходить со старым секретом до перезапуска.
 func (a *App) setPanelSecret(ctx context.Context, chatID int64, field, text string) {
+	if a.managed() {
+		a.managedNotice(ctx, chatID)
+		return
+	}
 	lang := a.lang(chatID)
 	text = strings.TrimSpace(text)
 	if text == "-" || text == "—" {
@@ -445,6 +449,10 @@ const panelVerifyTimeout = 8 * time.Second
 // отрезают бота от панели целиком. Не прошло — ничего не пишем и предлагаем
 // сохранить без проверки (переезд, когда адрес и токен меняют по очереди).
 func (a *App) setPanelConn(ctx context.Context, chatID int64, field, text string) {
+	if a.managed() {
+		a.managedNotice(ctx, chatID)
+		return
+	}
 	lang := a.lang(chatID)
 	ui := a.getUI(chatID)
 	ui.adminInput = ""
@@ -497,6 +505,10 @@ func (a *App) setPanelConn(ctx context.Context, chatID int64, field, text string
 
 // forcePanelConn сохраняет значение, не прошедшее проверку, — по явной просьбе.
 func (a *App) forcePanelConn(ctx context.Context, chatID int64) {
+	if a.managed() {
+		a.managedNotice(ctx, chatID)
+		return
+	}
 	lang := a.lang(chatID)
 	ui := a.getUI(chatID)
 	p := ui.panelPending
@@ -553,6 +565,9 @@ func saveFailNote(lang string, err error) string {
 // клиента. На ошибке записи откатывает только своё поле: остальное за это
 // время могли поменять.
 func (a *App) commitPanelConn(ctx context.Context, field, value string) error {
+	if a.managed() {
+		return errors.New("управляется через Ansible")
+	}
 	a.mu.Lock()
 	if a.botCfg == nil {
 		a.mu.Unlock()

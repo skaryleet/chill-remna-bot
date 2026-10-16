@@ -186,6 +186,9 @@ func (a *App) latestBuiltSHA(ctx context.Context, branch string) (string, error)
 }
 
 func (a *App) RunUpdateChecker(ctx context.Context) {
+	if a.managed() {
+		return
+	}
 	msk := time.FixedZone("MSK", 3*3600)
 	for {
 		a.mu.Lock()
