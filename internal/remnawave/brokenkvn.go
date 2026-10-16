@@ -63,8 +63,9 @@ func (c *Client) managedPage(ctx context.Context, id int64, cursor string) ([]pa
 	}
 	var body struct {
 		Response *struct {
-			Users []panelUser `json:"users"`
-			Next  *string     `json:"nextCursor"`
+			Users   []panelUser `json:"users"`
+			Next    *string     `json:"nextCursor"`
+			HasMore bool        `json:"hasMore"`
 		} `json:"response"`
 	}
 	if err = json.NewDecoder(io.LimitReader(resp.Body, 4<<20)).Decode(&body); err != nil || body.Response == nil || body.Response.Users == nil {
@@ -73,6 +74,9 @@ func (c *Client) managedPage(ctx context.Context, id int64, cursor string) ([]pa
 	next := ""
 	if body.Response.Next != nil {
 		next = *body.Response.Next
+	}
+	if body.Response.HasMore && next == "" {
+		return nil, "", errors.New("панель не вернула следующий курсор")
 	}
 	return body.Response.Users, next, nil
 }

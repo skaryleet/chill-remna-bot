@@ -10,7 +10,7 @@ import (
 )
 
 func TestManagedLookup(t *testing.T) {
-	for _, mode := range []string{"unique", "multiple", "wrong", "failure", "cycle", "empty"} {
+	for _, mode := range []string{"unique", "multiple", "wrong", "failure", "cycle", "empty", "truncated"} {
 		t.Run(mode, func(t *testing.T) {
 			calls := 0
 			srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -25,6 +25,10 @@ func TestManagedLookup(t *testing.T) {
 				}
 				if mode == "failure" {
 					w.WriteHeader(503)
+					return
+				}
+				if mode == "truncated" {
+					fmt.Fprint(w, `{"response":{"users":[],"nextCursor":null,"hasMore":true}}`)
 					return
 				}
 				if mode == "empty" {

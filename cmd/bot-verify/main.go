@@ -22,7 +22,7 @@ func verify(dir string) error {
 	if err != nil {
 		return err
 	}
-	db, err := sql.Open("sqlite", "file:"+filepath.Join(dir, "bot.db")+"?mode=ro&immutable=1")
+	db, err := sql.Open("sqlite", "file:"+filepath.Join(dir, "bot.db")+"?mode=ro")
 	if err != nil {
 		return err
 	}

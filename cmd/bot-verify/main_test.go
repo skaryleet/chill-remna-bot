@@ -29,7 +29,7 @@ func TestVerifyData(t *testing.T) {
 	if err = db.SaveConfig(context.Background(), &model.BotConfig{Installed: true, Language: "ru"}); err != nil {
 		t.Fatal(err)
 	}
-	db.Close()
+	defer db.Close()
 	if err = verify(dir); err != nil {
 		t.Fatal(err)
 	}
