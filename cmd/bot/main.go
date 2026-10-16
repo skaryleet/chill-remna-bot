@@ -38,7 +38,7 @@ func main() {
 	cfg.Commit = commit
 	cfg.BuildDate = buildDate
 	// Подробность лога — из окружения. По умолчанию прежняя (info).
-	log = slog.New(slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{Level: cfg.SlogLevel()}))
+	log = slog.New(slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{Level: cfg.SlogLevel(), ReplaceAttr: cfg.RedactLog}))
 
 	crypter, err := crypto.LoadOrCreate(cfg.SecretKey, cfg.DataDir)
 	if err != nil {

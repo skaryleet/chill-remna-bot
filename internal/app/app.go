@@ -711,6 +711,9 @@ func (a *App) AlertAdmin(key string, cause error) {
 	detail := ""
 	if cause != nil {
 		detail = cause.Error()
+		if a.managed() {
+			detail = "подробности в журнале сервиса"
+		}
 	}
 	msg.Send(ctx, a.cfg.AdminID, i18n.T(a.botLang(), key, detail))
 }

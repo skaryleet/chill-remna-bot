@@ -118,3 +118,30 @@ func envOr(key, def string) string {
 	}
 	return def
 }
+
+// RedactLog removes managed credentials even from transport error strings.
+func (c *Config) RedactLog(_ []string, attr slog.Attr) slog.Attr {
+	if c.Managed == nil {
+		return attr
+	}
+	var value string
+	switch attr.Value.Kind() {
+	case slog.KindString:
+		value = attr.Value.String()
+	case slog.KindAny:
+		err, ok := attr.Value.Any().(error)
+		if !ok {
+			return attr
+		}
+		value = err.Error()
+	default:
+		return attr
+	}
+	for _, secret := range []string{c.BotToken, c.Managed.PanelToken} {
+		if secret != "" {
+			value = strings.ReplaceAll(value, secret, "[скрыто]")
+		}
+	}
+	attr.Value = slog.StringValue(value)
+	return attr
+}
