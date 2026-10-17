@@ -110,3 +110,6 @@ Ansible: неверный хост/пустой digest/реквизиты/бит
 
 После отказа govulncheck обновить сборку/CI до Go 1.27.2 и x/net v0.60.0.
 Критерий: go test, race, vet и govulncheck проходят до публикации образа.
+
+CI использует golangci-lint v2.15.0: прежний v2.13.2 не читает export data Go 1.27.2.
+Критерий: lint завершается без typecheck ошибок на той же версии Go.
