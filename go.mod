@@ -2,12 +2,14 @@ module remnabot
 
 go 1.26.0
 
+toolchain go1.27.2
+
 require (
 	github.com/go-telegram/bot v1.27.0
 	github.com/heleket/go-sdk v0.3.0
 	github.com/jackc/pgx/v5 v5.11.0
 	golang.org/x/crypto v0.57.0
-	golang.org/x/net v0.59.0
+	golang.org/x/net v0.60.0
 	gopkg.in/yaml.v3 v3.0.1
 	modernc.org/sqlite v1.60.1
 )
