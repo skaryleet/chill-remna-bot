@@ -19,39 +19,46 @@ type Snapshot struct {
 
 func (s Snapshot) Text(now time.Time, ids map[string]string) string {
 	var b strings.Builder
-	b.WriteString("Статус сети — по данным панели\n")
+	b.WriteString("📡 <b>Статус сети</b>\n\n")
 	if s.At.IsZero() {
-		b.WriteString("Время проверки: нет данных\n")
+		fmt.Fprintf(&b, "Нет данных ⏳ 0/%d", len(ids))
+		return b.String()
 	} else {
-		fmt.Fprintf(&b, "Получено: %s МСК; возраст %d с\n", s.At.In(time.FixedZone("MSK", 3*3600)).Format("02.01.2006 15:04:05"), int(now.Sub(s.At).Seconds()))
+		fmt.Fprintf(&b, "Обновлено: %s МСК\n", s.At.In(time.FixedZone("MSK", 3*3600)).Format("02.01.2006 15:04:05"))
 		if now.Sub(s.At) > 180*time.Second {
-			b.WriteString("Данные устарели\n")
+			b.WriteString("Данные устарели ⚠️\n")
 		}
 	}
 	if s.Failed {
-		b.WriteString("Ошибка обновления; показан последний доступный снимок\n")
+		b.WriteString("Не удалось обновить ⚠️\n")
 	}
 	byID := map[string]Node{}
 	for _, n := range s.Nodes {
 		byID[n.UUID] = n
 	}
+	okCount, problemCount, deniedCount := 0, 0, 0
 	for _, name := range Hosts {
 		id, configured := ids[name]
 		if !configured {
 			continue
 		}
-		state := "нет данных"
-		if n, ok := byID[id]; ok && !s.At.IsZero() {
-			state = "не подключён"
-			if n.Connected {
-				state = "подключён"
-			}
-			if n.Disabled {
-				state = "отключён"
-			}
+		n, found := byID[id]
+		switch {
+		case !found || n.Disabled:
+			deniedCount++
+		case n.Connected:
+			okCount++
+		default:
+			problemCount++
 		}
-		fmt.Fprintf(&b, "%s: %s\n", name, state)
 	}
-	b.WriteString("Это наблюдение панели, не проверка клиентского VPN.")
+	total := len(ids)
+	fmt.Fprintf(&b, "\nOK ✅ %d/%d", okCount, total)
+	if problemCount > 0 {
+		fmt.Fprintf(&b, "\nЕсть проблемы ⚠️ %d/%d", problemCount, total)
+	}
+	if deniedCount > 0 {
+		fmt.Fprintf(&b, "\nНет доступа ❗ %d/%d", deniedCount, total)
+	}
 	return b.String()
 }

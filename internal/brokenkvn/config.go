@@ -13,6 +13,7 @@ import (
 type Config struct {
 	PanelURL   string            `json:"panel_url"`
 	PanelToken string            `json:"panel_token"`
+	SupportURL string            `json:"support_url"`
 	ProxyFile  string            `json:"proxy_file"`
 	Nodes      map[string]string `json:"nodes"`
 	Features   bool              `json:"features"`
@@ -31,7 +32,7 @@ func Load(path string) (*Config, error) {
 	if err = d.Decode(&c); err != nil {
 		return nil, errors.New("некорректная управляемая конфигурация")
 	}
-	if c.PanelURL != "https://console.cormon.ru" || strings.TrimSpace(c.PanelToken) == "" || c.ProxyFile != "/config/proxy-links.txt" || len(c.Nodes) != len(Hosts) {
+	if c.PanelURL != "https://console.cormon.ru" || strings.TrimSpace(c.PanelToken) == "" || !validSupportURL(c.SupportURL) || c.ProxyFile != "/config/proxy-links.txt" || len(c.Nodes) != len(Hosts) {
 		return nil, errors.New("неполная управляемая конфигурация")
 	}
 	seen := map[string]bool{}
@@ -43,6 +44,23 @@ func Load(path string) (*Config, error) {
 		seen[id] = true
 	}
 	return &c, nil
+}
+
+func validSupportURL(raw string) bool {
+	u, err := url.Parse(raw)
+	if err != nil || u.Scheme != "https" || u.Host != "t.me" || u.User != nil || u.RawQuery != "" || u.Fragment != "" {
+		return false
+	}
+	name := strings.TrimPrefix(u.Path, "/")
+	if len(name) < 5 || len(name) > 32 || strings.Contains(name, "/") {
+		return false
+	}
+	for _, r := range name {
+		if r != '_' && (r < 'a' || r > 'z') && (r < 'A' || r > 'Z') && (r < '0' || r > '9') {
+			return false
+		}
+	}
+	return true
 }
 
 func ParseLinks(raw string) ([]string, error) {

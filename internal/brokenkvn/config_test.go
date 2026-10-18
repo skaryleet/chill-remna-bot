@@ -25,8 +25,8 @@ func TestLinks(t *testing.T) {
 }
 func TestConfig(t *testing.T) {
 	p := filepath.Join(t.TempDir(), "managed.json")
-	raw := `{"panel_url":"https://console.cormon.ru","panel_token":"test-secret","proxy_file":"/config/proxy-links.txt","nodes":{"RU-1":"a","RU-2":"b","DE-1":"c","NL-1":"d","SW-1":"e"},"features":true}`
-	for _, bad := range []string{`{`, strings.ReplaceAll(raw, "https://", "http://"), strings.ReplaceAll(raw, "test-secret", ""), strings.ReplaceAll(raw, `"e"`, `"a"`)} {
+	raw := `{"panel_url":"https://console.cormon.ru","panel_token":"test-secret","support_url":"https://t.me/drknsll","proxy_file":"/config/proxy-links.txt","nodes":{"RU-1":"a","RU-2":"b","DE-1":"c","NL-1":"d","SW-1":"e"},"features":true}`
+	for _, bad := range []string{`{`, strings.ReplaceAll(raw, "https://console", "http://console"), strings.ReplaceAll(raw, "test-secret", ""), strings.ReplaceAll(raw, "https://t.me/drknsll", "https://example.com/support"), strings.ReplaceAll(raw, `"e"`, `"a"`)} {
 		os.WriteFile(p, []byte(bad), 0600)
 		if _, err := Load(p); err == nil || strings.Contains(err.Error(), "test-secret") {
 			t.Fatalf("invalid config: %v", err)
@@ -40,12 +40,24 @@ func TestConfig(t *testing.T) {
 func TestStatus(t *testing.T) {
 	now := time.Date(2026, 10, 16, 12, 0, 0, 0, time.UTC)
 	s := Snapshot{}
-	if !strings.Contains(s.Text(now, map[string]string{"RU-1": "a"}), "нет данных") {
+	if !strings.Contains(s.Text(now, map[string]string{"RU-1": "a"}), "Нет данных") {
 		t.Fatal("empty")
 	}
 	s = Snapshot{At: now.Add(-181 * time.Second), Failed: true, Nodes: []Node{{UUID: "a", Connected: true}, {UUID: "b", Disabled: true}}}
 	got := s.Text(now, map[string]string{"RU-1": "a", "RU-2": "b", "DE-1": "missing"})
-	for _, want := range []string{"устарели", "Ошибка обновления", "отключён", "нет данных", "по данным панели", "МСК"} {
+	for _, want := range []string{"Данные устарели", "Не удалось обновить", "OK ✅ 1/3", "Нет доступа ❗ 2/3", "МСК"} {
+		if !strings.Contains(got, want) {
+			t.Fatal(want, got)
+		}
+	}
+	for _, absent := range []string{"по данным панели", "Это наблюдение", "Есть проблемы ⚠️ 0/3"} {
+		if strings.Contains(got, absent) {
+			t.Fatal(absent, got)
+		}
+	}
+	problem := Snapshot{At: now, Nodes: []Node{{UUID: "a", Connected: true}, {UUID: "b"}, {UUID: "c", Disabled: true}}}
+	got = problem.Text(now, map[string]string{"RU-1": "a", "RU-2": "b", "DE-1": "c"})
+	for _, want := range []string{"OK ✅ 1/3", "Есть проблемы ⚠️ 1/3", "Нет доступа ❗ 1/3"} {
 		if !strings.Contains(got, want) {
 			t.Fatal(want, got)
 		}

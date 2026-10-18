@@ -12,6 +12,7 @@ import (
 	"remnabot/internal/brokenkvn"
 	"remnabot/internal/model"
 	"remnabot/internal/remnawave"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -19,12 +20,12 @@ import (
 
 func TestManagedConfigurationAndGuards(t *testing.T) {
 	a, fm, fs := newTestApp(t)
-	a.cfg.Managed = &brokenkvn.Config{PanelURL: "https://console.cormon.ru", PanelToken: "managed"}
+	a.cfg.Managed = &brokenkvn.Config{PanelURL: "https://console.cormon.ru", PanelToken: "managed", SupportURL: "https://t.me/drknsll"}
 	a.cfg.DBKind = "sqlite"
 	if err := a.Bootstrap(context.Background()); err != nil {
 		t.Fatal(err)
 	}
-	if !a.botCfg.Installed || a.botCfg.Panel.APIToken != "managed" || a.botCfg.Trial.Enabled {
+	if !a.botCfg.Installed || a.botCfg.Panel.APIToken != "managed" || a.botCfg.Contact.SupportURL != "https://t.me/drknsll" || a.botCfg.Trial.Enabled {
 		t.Fatal("bootstrap")
 	}
 	a.botCfg.Panel = model.PanelConfig{BaseURL: "https://evil.invalid", APIToken: "old"}
@@ -39,6 +40,9 @@ func TestManagedConfigurationAndGuards(t *testing.T) {
 	}
 	if a.managedBlockedCallback("menu:broadcast") {
 		t.Fatal("broadcast removed")
+	}
+	if !a.managedBlockedCallback("ctc:support") || !a.managedBlockedCallback("ctc:clear") {
+		t.Fatal("managed support can be changed")
 	}
 	_ = fm
 	_ = fs
@@ -86,8 +90,16 @@ func TestManagedFeatureAuthorization(t *testing.T) {
 			q.Message = models.MaybeInaccessibleMessage{Message: &models.Message{Chat: models.Chat{ID: 42, Type: models.ChatTypePrivate}}}
 			a.handleCallback(context.Background(), q)
 			got := strings.Join(fm.texts, "\n")
-			if strings.Contains(got, "tg://proxy") != (mode == "active") {
-				t.Fatalf("unexpected disclosure: %s", got)
+			if mode != "active" && (len(fm.urls) != 0 || strings.Contains(got, "secret=")) {
+				t.Fatalf("unexpected disclosure: text=%q urls=%v", got, fm.urls)
+			}
+			if mode == "active" {
+				if !slices.Contains(fm.btnText, "⚡️ Подключить Proxy 1") || !slices.Contains(fm.btnText, "⬅️ Назад") || !slices.Contains(fm.btnText, "🏠 Главная") {
+					t.Fatalf("proxy UX buttons: %v", fm.btnText)
+				}
+				if len(fm.urls) != 1 || !strings.HasPrefix(fm.urls[0], "tg://proxy?") || strings.Contains(got, "secret=") {
+					t.Fatalf("proxy presentation: text=%q urls=%v", got, fm.urls)
+				}
 			}
 			// A valid user cannot redirect the response into a group or someone else's chat.
 			fm.texts = nil
@@ -98,6 +110,23 @@ func TestManagedFeatureAuthorization(t *testing.T) {
 				t.Fatal("group callback handled")
 			}
 		})
+	}
+}
+
+func TestManagedMenuLabelsAndStatusNavigation(t *testing.T) {
+	a, fm, _ := newTestApp(t)
+	a.cfg.Managed = &brokenkvn.Config{Features: true, Nodes: map[string]string{"RU-1": "a"}}
+	a.botCfg = &model.BotConfig{Installed: true, Language: "ru"}
+	a.showMenu(context.Background(), 42, false, "Test")
+	if !slices.Contains(fm.btnText, "🛡️ Telegram Proxy") || !slices.Contains(fm.btnText, "📡 Статус сети") {
+		t.Fatalf("managed menu labels: %v", fm.btnText)
+	}
+	fm.btnText, fm.cbData = nil, nil
+	a.networkStatus = brokenkvn.Snapshot{At: time.Now(), Nodes: []brokenkvn.Node{{UUID: "a", Connected: true}}}
+	a.showManagedStatus(context.Background(), 42)
+	got := strings.Join(fm.texts, "\n")
+	if !strings.Contains(got, "OK ✅ 1/1") || !slices.Contains(fm.btnText, "⬅️ Назад") || !slices.Contains(fm.btnText, "🏠 Главная") {
+		t.Fatalf("status UX: text=%q buttons=%v", got, fm.btnText)
 	}
 }
 

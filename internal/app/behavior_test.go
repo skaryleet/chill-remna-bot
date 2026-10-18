@@ -182,7 +182,7 @@ func (f *fakeMsg) SendPhotoCacheable(_ context.Context, _ int64, _ string, _ []b
 	f.recordKB(rows)
 	return f.add(caption), ""
 }
-func (f *fakeMsg) SendBanner(_ context.Context, _ int64, photo models.InputFile, caption string, _ []models.MessageEntity, _ models.ReplyMarkup) (int, error) {
+func (f *fakeMsg) SendBanner(_ context.Context, _ int64, photo models.InputFile, caption string, _ []models.MessageEntity, markup models.ReplyMarkup) (int, error) {
 	// failBanner имитирует отказ Telegram на конкретной картинке (битый
 	// file_id или недоступная ссылка), failAllBanners — отказ на любой.
 	if f.failAllBanners {
@@ -194,6 +194,12 @@ func (f *fakeMsg) SendBanner(_ context.Context, _ int64, photo models.InputFile,
 			msg = "bad request, Bad Request: wrong remote file identifier specified: Wrong string length"
 		}
 		return 0, errors.New(msg)
+	}
+	switch kb := markup.(type) {
+	case models.InlineKeyboardMarkup:
+		f.recordKB(kb.InlineKeyboard)
+	case *models.InlineKeyboardMarkup:
+		f.recordKB(kb.InlineKeyboard)
 	}
 	return f.add(caption), nil
 }

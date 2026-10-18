@@ -89,6 +89,10 @@ func (a *App) onContacts(ctx context.Context, chatID int64, val string) {
 }
 
 func (a *App) setContact(ctx context.Context, chatID int64, field, raw string) {
+	if a.managed() && field == "support" {
+		a.managedNotice(ctx, chatID)
+		return
+	}
 	raw = strings.TrimSpace(raw)
 	if raw == "-" || raw == "—" {
 		raw = ""

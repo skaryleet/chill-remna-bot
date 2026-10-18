@@ -3,12 +3,13 @@ package app
 import (
 	"context"
 	"errors"
-	"html"
+	"fmt"
 	"os"
 	"strings"
 	"time"
 
 	"github.com/go-telegram/bot/models"
+	"remnabot/internal/assets"
 	"remnabot/internal/brokenkvn"
 	"remnabot/internal/model"
 	"remnabot/internal/remnawave"
@@ -26,6 +27,7 @@ func (a *App) managedConfiguration(ctx context.Context, cfg *model.BotConfig, ex
 	}
 	cfg.DBKind = model.DBSQLite
 	cfg.Panel = a.panelWithEnv(cfg.Panel)
+	cfg.Contact.SupportURL = a.cfg.Managed.SupportURL
 	cfg.UpdateCheck = model.UpdateCheckConfig{Init: true, Enabled: false, ChannelChosen: true}
 	if fresh {
 		if err := a.store.SaveConfig(ctx, cfg); err != nil {
@@ -45,6 +47,8 @@ func (a *App) managedBlockedCallback(data string) bool {
 		return true
 	case cbInput:
 		return strings.HasPrefix(val, "panel_")
+	case cbContacts:
+		return val == "support" || val == "clear"
 	case cbMenu:
 		switch val {
 		case "reconf", "reconfig", "update", "panelauth":
@@ -108,23 +112,40 @@ func (a *App) managedFeature(ctx context.Context, id int64, feature string) {
 	}
 	switch feature {
 	case "proxy":
-		raw, err := os.ReadFile(a.cfg.Managed.ProxyFile)
-		if err != nil {
-			a.send(ctx, id, "Proxy-ссылки временно недоступны.")
-			return
-		}
-		links, err := brokenkvn.ParseLinks(string(raw))
-		if err != nil {
-			a.send(ctx, id, "Proxy-ссылки временно недоступны.")
-			return
-		}
-		a.send(ctx, id, "Telegram Proxy\n"+html.EscapeString(strings.Join(links, "\n")))
+		a.showManagedProxy(ctx, id)
 	case "status":
-		a.mu.Lock()
-		snapshot := a.networkStatus
-		a.mu.Unlock()
-		a.send(ctx, id, snapshot.Text(time.Now(), a.cfg.Managed.Nodes))
+		a.showManagedStatus(ctx, id)
 	}
+}
+
+func (a *App) managedNavigation(id int64) []models.InlineKeyboardButton {
+	return navBack(a.lang(id), "menu:home")
+}
+
+func (a *App) showManagedProxy(ctx context.Context, id int64) {
+	raw, err := os.ReadFile(a.cfg.Managed.ProxyFile)
+	if err != nil {
+		a.sendKBSection(ctx, id, assets.SectionMainMenu, "🛡️ <b>Telegram Proxy</b>\n\nСсылки временно недоступны.", [][]models.InlineKeyboardButton{a.managedNavigation(id)})
+		return
+	}
+	links, err := brokenkvn.ParseLinks(string(raw))
+	if err != nil {
+		a.sendKBSection(ctx, id, assets.SectionMainMenu, "🛡️ <b>Telegram Proxy</b>\n\nСсылки временно недоступны.", [][]models.InlineKeyboardButton{a.managedNavigation(id)})
+		return
+	}
+	rows := make([][]models.InlineKeyboardButton, 0, len(links)+1)
+	for i, link := range links {
+		rows = append(rows, []models.InlineKeyboardButton{{Text: fmt.Sprintf("⚡️ Подключить Proxy %d", i+1), URL: link}})
+	}
+	rows = append(rows, a.managedNavigation(id))
+	a.sendKBSection(ctx, id, assets.SectionMainMenu, "🛡️ <b>Telegram Proxy</b>\n\nВыберите способ подключения:", rows)
+}
+
+func (a *App) showManagedStatus(ctx context.Context, id int64) {
+	a.mu.Lock()
+	snapshot := a.networkStatus
+	a.mu.Unlock()
+	a.sendKBSection(ctx, id, assets.SectionMainMenu, snapshot.Text(time.Now(), a.cfg.Managed.Nodes), [][]models.InlineKeyboardButton{a.managedNavigation(id)})
 }
 func (a *App) pollManagedStatus(ctx context.Context) {
 	a.mu.Lock()
