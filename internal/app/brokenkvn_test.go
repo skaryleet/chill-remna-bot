@@ -28,6 +28,10 @@ func TestManagedConfigurationAndGuards(t *testing.T) {
 	if !a.botCfg.Installed || a.botCfg.Panel.APIToken != "managed" || a.botCfg.Contact.SupportURL != "https://t.me/drknsll" || a.botCfg.Trial.Enabled {
 		t.Fatal("bootstrap")
 	}
+	a.showMenu(context.Background(), 42, false, "Test")
+	if !slices.Contains(fm.btnText, "🛟 Поддержка") || !slices.Contains(fm.urls, "https://t.me/drknsll") {
+		t.Fatalf("support is not enabled: labels=%v urls=%v", fm.btnText, fm.urls)
+	}
 	a.botCfg.Panel = model.PanelConfig{BaseURL: "https://evil.invalid", APIToken: "old"}
 	pc := a.panelWithEnv(a.botCfg.Panel)
 	if pc.APIToken != "managed" || pc.BaseURL != "https://console.cormon.ru" {
